@@ -629,6 +629,95 @@ Timeline.TimelineUIUtils = class {
     }
   }
 
+  // TODO: DRY
+  /**
+   * @param {!SDK.TracingModel.Event} event
+   * @param {?SDK.Target} target
+   * @param {!Components.Linkifier} linkifier
+   * @return {!String}
+   */
+  static buildDetailsForEvent(event, target, linkifier) {
+    const recordType = TimelineModel.TimelineModel.RecordType;
+    let detailsText = '';
+    const eventData = event.args && event.args.data ? event.args['data'] : {};
+    switch (event.name) {
+      case recordType.GCEvent:
+      case recordType.MajorGC:
+      case recordType.MinorGC:
+      case recordType.EventDispatch:
+      case recordType.Paint:
+      case recordType.Animation:
+      case recordType.EmbedderCallback:
+      case recordType.ParseHTML:
+      case recordType.WasmStreamFromResponseCallback:
+      case recordType.WasmCompiledModule:
+      case recordType.WasmModuleCacheHit:
+      case recordType.WasmCachedModule:
+      case recordType.WasmModuleCacheInvalid:
+      case recordType.WebSocketCreate:
+      case recordType.WebSocketSendHandshakeRequest:
+      case recordType.WebSocketReceiveHandshakeResponse:
+      case recordType.WebSocketDestroy:
+        detailsText = Timeline.TimelineUIUtils.buildDetailsTextForTraceEvent(event, target);
+        break;
+      case recordType.PaintImage:
+      case recordType.DecodeImage:
+      case recordType.ResizeImage:
+      case recordType.DecodeLazyPixelRef:
+      case recordType.XHRReadyStateChange:
+      case recordType.XHRLoad:
+      case recordType.ResourceWillSendRequest:
+      case recordType.ResourceSendRequest:
+      case recordType.ResourceReceivedData:
+      case recordType.ResourceReceiveResponse:
+      case recordType.ResourceFinish: {
+        const url = TimelineModel.TimelineData.forEvent(event).url;
+        if (url) {
+          detailsText = Components.Linkifier.linkifyURL(url);
+        }
+        break;
+      }
+      case recordType.FunctionCall:
+      case recordType.JSFrame:
+        const location = linkifyLocation(
+            eventData['scriptId'], eventData['url'], eventData['lineNumber'], eventData['columnNumber']);
+        detailsText = Timeline.TimelineUIUtils.frameDisplayName(eventData);
+        detailsText = `${detailsText}${location ? '@' + location : ''}`;
+        break;
+      case recordType.CompileModule:
+        detailsText = linkifyLocation('', event.args['fileName'], 0, 0);
+        break;
+      case recordType.CompileScript:
+      case recordType.EvaluateScript: {
+        const url = eventData['url'];
+        if (url) {
+          detailsText = linkifyLocation('', url, eventData['lineNumber'], 0);
+        }
+        break;
+      }
+      case recordType.StreamingCompileScript: {
+        const url = eventData['url'];
+        if (url) {
+          detailsText = linkifyLocation('', url, 0, 0);
+        }
+        break;
+      }
+    }
+
+    return detailsText;
+    // TODO: DRY
+    /**
+     * @param {string} scriptId
+     * @param {string} url
+     * @param {number} lineNumber
+     * @param {number=} columnNumber
+     * @return {?Element}
+     */
+    function linkifyLocation(scriptId, url, lineNumber, columnNumber) {
+      return linkifier.linkifyScriptLocation(target, scriptId, url, lineNumber, columnNumber, 'timeline-details').innerText;
+    }
+  }
+
   /**
    * @param {!SDK.TracingModel.Event} event
    * @param {?SDK.Target} target

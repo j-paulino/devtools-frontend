@@ -296,3 +296,10 @@ Timeline.TimelineDetailsView.Tab = {
   PaintProfiler: 'PaintProfiler',
   LayerViewer: 'LayerViewer'
 };
+
+Timeline.TimelineDetailsView.RankingsView = class extends UI.VBox {
+  constructor(delegate) {
+    super();
+    this.element.classList.add('timeline-rankings');
+  }
+};

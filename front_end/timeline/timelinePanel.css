@@ -380,6 +380,35 @@
     line-height: 12px;
 }
 
+.timeline-rankings {
+  display: flex;
+  width: 100%;
+  height: 100px;
+  overflow: scroll;
+}
+
+.timeline-rank-duration {
+  display: inline-block;
+  border-radius: 5px;
+  padding: 3px;
+  margin-right: 5px;
+  color: #FFF !important;
+}
+
+a.dark-anchor {
+  text-decoration: none;
+}
+
+a.dark-anchor .timeline-rank-name {
+  display: inline-block;
+  color: #333 !important;
+}
+
+.timeline-rankings li {
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 5px;
+}
 .timeline-flamechart {
     overflow: hidden;
 }
