@@ -71,6 +71,9 @@ Timeline.TimelineFlameChartView = class extends UI.VBox {
     this._detailsSplitWidget.setSidebarWidget(this._detailsView);
     this._detailsSplitWidget.show(this.element);
 
+    this._rankingsView = new Timeline.TimelineDetailsView.RankingsView(delegate);
+    this._rankingsView.show(this.element);
+
     this._onMainEntrySelected = this._onEntrySelected.bind(this, this._mainDataProvider);
     this._onNetworkEntrySelected = this._onEntrySelected.bind(this, this._networkDataProvider);
     this._mainFlameChart.addEventListener(PerfUI.FlameChart.Events.EntrySelected, this._onMainEntrySelected, this);
@@ -184,6 +187,93 @@ Timeline.TimelineFlameChartView = class extends UI.VBox {
     this._nextExtensionIndex = 0;
     this._appendExtensionData();
     this._refresh();
+
+    // TODO: Find better location for this
+    const group = this._mainDataProvider
+        .timelineData()
+        .groups.find(
+          (group) => (
+            group.name.includes('Main ') &&
+            group._track.type === TimelineModel.TimelineModel.TrackType.MainThread
+          )
+        );
+      const events = (group ? group._track.events : []).filter(event =>
+        event.name !== TimelineModel.TimelineModel.RecordType.Animation
+      );
+      this._buildRankedList(events);
+  }
+
+  _buildRankedList(events){
+    const taskList = document.createElement('ul');
+    taskList.classList.add('task-list');
+    events
+      .filter(event =>
+          event.duration > 100 &&
+          event.name === TimelineModel.TimelineModel.RecordType.Task)
+      .sort((a, b) => a.duration - b.duration)
+      .reverse()
+      .forEach(task => {
+        const taskEl = this._getRankItemEl(task);
+        const taskListItem = document.createElement('li');
+        taskListItem.appendChild(taskEl);
+
+        const subTaskList = document.createElement('ul');
+        subTaskList.classList.add('subtask-list');
+        events
+          .filter(event => (
+            event.duration > 100 &&
+            event.startTime >= task.startTime && event.endTime <= task.endTime &&
+            event.name !== TimelineModel.TimelineModel.RecordType.Task
+          ))
+          .sort((a, b) => a.startTime - b.startTime)
+          .forEach((substask) => {
+            const subtaskEl = this._getRankItemEl(substask);
+            const subtaskListItem = document.createElement('li');
+            subtaskListItem.appendChild(subtaskEl);
+
+            subTaskList.appendChild(subtaskListItem);
+          });
+        taskListItem.appendChild(subTaskList);
+        taskList.appendChild(taskListItem);
+      });
+      this._rankingsView.element.appendChild(taskList);
+  }
+
+  _getRankItemEl(event) {
+    const details = Timeline.TimelineUIUtils.buildDetailsForEvent(
+        event,
+        this._model.timelineModel().targetByEvent(event),
+        new Components.Linkifier()
+      ) || `${event.name}`;
+
+    const anchor = document.createElement('a');
+    anchor.href = '#';
+    if (UI.themeSupport.themeName() === 'dark') {
+      anchor.classList.add('dark-anchor');
+    }
+
+    const eventStyle = Timeline.TimelineUIUtils
+      ._eventStylesMap[event.name];
+    const categoryColor = eventStyle ? eventStyle.category.color: 'gray';
+
+    anchor.innerHTML = `
+      <span
+        class="timeline-rank-duration"
+        style="background-color: ${categoryColor};"
+      >
+        ${parseInt(event.duration)}ms
+      </span>
+      <span class="timeline-rank-name">
+        ${details}
+      </span>
+    `;
+
+    anchor.addEventListener('click', () => {
+      this._delegate.select(Timeline.TimelineSelection.fromTraceEvent(event));
+      this._model.setWindow({left: event.startTime+20, right: event.endTime+20}, true);
+    });
+
+    return anchor;
   }
 
   _updateTrack() {

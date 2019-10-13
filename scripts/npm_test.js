@@ -19,7 +19,7 @@ var Flags = {
 
 var IS_DEBUG_ENABLED =
     utils.includes(process.argv, Flags.DEBUG_DEVTOOLS) || utils.includes(process.argv, Flags.DEBUG_DEVTOOLS_SHORTHAND);
-var CUSTOM_CHROMIUM_PATH = utils.parseArgs(process.argv)[Flags.CHROMIUM_PATH];
+var CUSTOM_CHROMIUM_PATH = utils.parseArgs(process.argv)[Flags.CHROMIUM_PATH] || './';
 var IS_FETCH_CONTENT_SHELL = utils.includes(process.argv, Flags.FETCH_CONTENT_SHELL);
 var TARGET = utils.parseArgs(process.argv)[Flags.TARGET] || 'Release';
 
