@@ -135,8 +135,6 @@ ColorPicker.Spectrum = class extends UI.VBox {
     /** @type {!Map.<string, !ColorPicker.Spectrum.Palette>} */
     this._palettes = new Map();
     this._palettePanel = this.contentElement.createChild('div', 'palette-panel');
-    this._palettePanel.tabIndex = -1;
-    this._palettePanel.addEventListener('keydown', this._onPalettePanelKeydown.bind(this));
     this._palettePanelShowing = false;
     this._paletteSectionContainer = this.contentElement.createChild('div', 'spectrum-palette-container');
     this._paletteContainer = this._paletteSectionContainer.createChild('div', 'spectrum-palette');
@@ -242,9 +240,10 @@ ColorPicker.Spectrum = class extends UI.VBox {
     const title = this._palettePanel.createChild('div', 'palette-title');
     title.textContent = Common.UIString('Color Palettes');
     const toolbar = new UI.Toolbar('', this._palettePanel);
-    const closeButton = new UI.ToolbarButton('Return to color picker', 'largeicon-delete');
-    closeButton.addEventListener(UI.ToolbarButton.Events.Click, this._togglePalettePanel.bind(this, false));
-    toolbar.appendToolbarItem(closeButton);
+    this._closeButton = new UI.ToolbarButton(ls`Return to color picker`, 'largeicon-delete');
+    this._closeButton.addEventListener(UI.ToolbarButton.Events.Click, this._togglePalettePanel.bind(this, false));
+    this._closeButton.element.addEventListener('keydown', this._onCloseBtnKeydown.bind(this));
+    toolbar.appendToolbarItem(this._closeButton);
     for (const palette of this._palettes.values()) {
       this._palettePanel.appendChild(this._createPreviewPaletteElement(palette));
     }
@@ -268,8 +267,8 @@ ColorPicker.Spectrum = class extends UI.VBox {
   /**
    * @param {!Event} event
    */
-  _onPalettePanelKeydown(event) {
-    if (isEscKey(event)) {
+  _onCloseBtnKeydown(event) {
+    if (isEscKey(event) || isEnterOrSpaceKey(event)) {
       this._togglePalettePanel(false);
       event.consume(true);
     }
@@ -284,7 +283,7 @@ ColorPicker.Spectrum = class extends UI.VBox {
       return;
     }
     if (this._palettePanelShowing) {
-      this._palettePanel.focus({preventScroll: true});
+      this._closeButton.element.focus({preventScroll: true});
     } else {
       this.contentElement.focus();
     }
@@ -318,9 +317,14 @@ ColorPicker.Spectrum = class extends UI.VBox {
       const animationDelay = animate ? i * 100 / palette.colors.length : 0;
       const colorElement = this._createPaletteColor(palette.colors[i], palette.colorNames[i], animationDelay);
       colorElement.tabIndex = -1;
+      UI.ARIAUtils.markAsButton(colorElement);
+      UI.ARIAUtils.setAccessibleName(colorElement, ls`Color ${palette.colors[i]}`);
       colorElement.addEventListener(
           'mousedown',
           this._paletteColorSelected.bind(this, palette.colors[i], palette.colorNames[i], palette.matchUserFormat));
+      colorElement.addEventListener(
+          'keydown',
+          this._onPaletteColorKeydown.bind(this, palette.colors[i], palette.colorNames[i], palette.matchUserFormat));
       if (palette.mutable) {
         colorElement.__mutable = true;
         colorElement.__color = palette.colors[i];
@@ -332,9 +336,13 @@ ColorPicker.Spectrum = class extends UI.VBox {
         shadow = colorElement.createChild('div', 'spectrum-palette-color spectrum-palette-color-shadow');
         shadow.style.background = palette.colors[i];
         colorElement.title = ls`${palette.colors[i]}. Long-click to show alternate shades.`;
+        UI.ARIAUtils.setAccessibleName(colorElement, colorElement.title);
         new UI.LongClickController(colorElement, this._showLightnessShades.bind(this, colorElement, palette.colors[i]));
       }
       this._paletteContainer.appendChild(colorElement);
+    }
+    if (this._paletteContainer.childNodes.length > 0) {
+      this._paletteContainer.childNodes[0].tabIndex = 0;
     }
     this._paletteContainerMutable = palette.mutable;
 
@@ -388,6 +396,8 @@ ColorPicker.Spectrum = class extends UI.VBox {
     for (let i = shades.length - 1; i >= 0; i--) {
       const shadeElement =
           this._createPaletteColor(shades[i], undefined /* colorName */, i * 200 / shades.length + 100);
+      UI.ARIAUtils.markAsButton(shadeElement);
+      UI.ARIAUtils.setAccessibleName(shadeElement, ls`Color ${shades[i]}`);
       shadeElement.addEventListener('mousedown', this._paletteColorSelected.bind(this, shades[i], shades[i], false));
       this._shadesContainer.appendChild(shadeElement);
     }
@@ -618,6 +628,26 @@ ColorPicker.Spectrum = class extends UI.VBox {
     this._innerSetColor(
         color.hsva(), colorText, colorName, matchUserFormat ? this._colorFormat : color.format(),
         ColorPicker.Spectrum._ChangeSource.Other);
+  }
+
+  /**
+   * @param {string} colorText
+   * @param {(string|undefined)} colorName
+   * @param {boolean} matchUserFormat
+   * @param {!Event} event
+   */
+  _onPaletteColorKeydown(colorText, colorName, matchUserFormat, event) {
+    if (isEnterOrSpaceKey(event)) {
+      this._paletteColorSelected(colorText, colorName, matchUserFormat);
+      // If this is a long keypress on color palette of type Material then, it needs to handled by _showLightnessShades on same element. So, just stopPropagation instead of consuming it.
+      event.stopPropagation();
+    } else if (event.key === 'ArrowLeft' && event.target.previousElementSibling) {
+      event.target.previousElementSibling.focus();
+      event.consume(true);
+    } else if (event.key === 'ArrowRight' && event.target.nextElementSibling) {
+      event.target.nextElementSibling.focus();
+      event.consume(true);
+    }
   }
 
   /**
@@ -1061,7 +1091,7 @@ ColorPicker.Spectrum.PaletteGenerator = class {
    * @return {!Promise}
    */
   async _processStylesheet(stylesheet) {
-    let text = await stylesheet.requestContent() || '';
+    let text = (await stylesheet.requestContent()).content || '';
     text = text.toLowerCase();
     const regexResult = text.match(/((?:rgb|hsl)a?\([^)]+\)|#[0-9a-f]{6}|#[0-9a-f]{3})/g) || [];
     for (const c of regexResult) {
